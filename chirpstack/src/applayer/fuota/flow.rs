@@ -771,6 +771,7 @@ impl Flow {
                 multicast_group_id: self.fuota_deployment.id,
                 f_port: self.device_profile.app_layer_params.ts004_f_port as i16,
                 data: pl,
+                expires_at: self.fuota_deployment.multicast_session_end,
                 ..Default::default()
             })
             .await?;
@@ -886,6 +887,16 @@ impl Flow {
         // Proceed with next step after reaching the max attempts.
         if self.job.attempt_count > self.job.max_retry_count {
             return Ok(Some((FuotaJob::Complete, Utc::now())));
+        }
+
+        if !multicast::get_queue(&self.fuota_deployment.id)
+            .await?
+            .is_empty()
+        {
+            return Ok(Some((
+                FuotaJob::DeleteMcGroup,
+                Utc::now() + self.scheduler_interval,
+            )));
         }
 
         info!("Delete multicast group");
